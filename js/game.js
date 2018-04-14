@@ -302,10 +302,10 @@ import sprites from './sprites.js';
     let currentWidth, currentHeight;
 
     if (window.innerHeight > window.innerWidth) {
-      currentWidth = window.innerWidth;
+      currentWidth = Math.min(window.innerWidth, WIDTH);
       currentHeight = currentWidth;
     } else {
-      currentHeight = window.innerHeight;
+      currentHeight = Math.min(window.innerHeight, HEIGHT);
       currentWidth = currentHeight;
     }
 
