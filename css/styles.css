@@ -1,0 +1,19 @@
+html, body {
+  /* width: 100%; */
+  /* height: 100%; */
+  padding: 0;
+  margin: 0;
+}
+
+.container {
+  margin: auto;
+}
+
+canvas#game {
+  width: 640px;
+  height: 640px;
+  margin: 0 auto;
+  border-radius: 15px;
+  display: block;
+  border: 1px solid #ccc;
+}
