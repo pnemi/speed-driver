@@ -1,4 +1,4 @@
-const tiles = {
+const sprites = {
   "road": {
     x: 262,
     y: 2,
@@ -10,6 +10,61 @@ const tiles = {
     y: 160,
     w: 40,
     h: 66
+  },
+  "car_crashed": {
+    x: 396,
+    y: 174,
+    w: 40,
+    h: 66
+  },
+  "obstackle": {
+    type: "obstackle",
+    x: 176,
+    y: 132,
+    w: 50,
+    h: 18
+  },
+  "yellow_car": {
+    type: "other_car",
+    x: 440,
+    y: 175,
+    w: 40,
+    h: 62
+  },
+  "purple_car": {
+    type: "other_car",
+    x: 352,
+    y: 228,
+    w: 30,
+    h: 46
+  },
+  "green_car": {
+    type: "other_car",
+    x: 44,
+    y: 452,
+    w: 34,
+    h: 46
+  },
+  "green_car": {
+    type: "other_car",
+    x: 44,
+    y: 452,
+    w: 34,
+    h: 46
+  },
+  "orange_truck": {
+    type: "other_car",
+    x: 436,
+    y: 88,
+    w: 46,
+    h: 84
+  },
+  "blue_truck": {
+    type: "other_car",
+    x: 436,
+    y: 0,
+    w: 46,
+    h: 84
   },
   "life_indicator": {
     x: 4,
@@ -66,4 +121,4 @@ const tiles = {
     h: 154
   }
 };
-export default tiles;
+export default sprites;

@@ -5,11 +5,15 @@ import sprites from './sprites.js';
   const tileset = new Image();
   const canvas = document.getElementById("game");
   const ctx = canvas.getContext("2d");
+
+  let animLoop = null;
+  let lastTick, deltaTime;
+
   const WIDTH = 640;
   const HEIGHT = 640;
 
-  const cx = WIDTH / 2;
-  const cy = HEIGHT / 2;
+  const CENTER_X = WIDTH / 2;
+  const CENTER_Y = HEIGHT / 2;
 
   const SCALE = 2;
   const TO_RADIANS = Math.PI / 180;
@@ -29,8 +33,6 @@ import sprites from './sprites.js';
 
   const GREEN = "#5AC546";
 
-
-  const ratio = WIDTH / HEIGHT;
   let currentWidth = null;
   let currentHeight = null;
 
@@ -42,9 +44,17 @@ import sprites from './sprites.js';
 
   const CAR_BOTTOM_PADDING = 20;
 
+  // flags to indicate car direction when turning, resp. changing lane
   const DIR = {
     LEFT: -1,
     RIGHT: 1
+  }
+
+  // flags to indicate whether car is good, collided recently or has crashed
+  const PLAYER_STATUS = {
+    NORMAL: 1,
+    COLLIDED: 2,
+    CRASHED: 3
   }
 
   const SCORE_GAIN = 2; // players gets 2 score per second
@@ -53,24 +63,37 @@ import sprites from './sprites.js';
 
   const playerCar = {
     // set init position
-    x: cx - (sprites["car"].w * SCALE / 2),
+    x: CENTER_X - (sprites["car"].w * SCALE / 2),
     y: HEIGHT - (sprites["car"].h * SCALE) - CAR_BOTTOM_PADDING,
     laneIndex: 1, // index of lane
     speed: 2, // car speed or speed of moving road and sideways respectively
     isTurning: false,
     turningDir: null,
-    turningSpeed: 8, // pixels per second
-    lives: 3 // 3 tries
+    turningSpeed: 200 * SCALE, // pixels per second
+    lives: 3, // 3 tries
+    status: PLAYER_STATUS.NORMAL
   };
 
   const LANES_OFSSET = 100; // space between lanes
 
+  const LANE_WIDTH = sprites["road"].w / NUM_OF_LANES;
+  const LANE_CX = LANE_WIDTH / 2;
+
+  const LANES_CENTERS = [
+    ~~LANE_CX,
+    ~~(LANE_WIDTH + LANE_CX),
+    ~~(LANE_WIDTH * 2 + LANE_CX)
+  ];
 
   const LANES_POS = [
     playerCar.x - 100,
     playerCar.x,
     playerCar.x + 100
   ];
+
+  // filtered other cars pool
+  const OTHER_CARS_POOL = Object.values(sprites)
+    .filter(s => s.type === "other_car");
 
   // drawing
 
@@ -209,7 +232,7 @@ import sprites from './sprites.js';
     let scoreLabelWidth = ctx.measureText(SCORE_LABEL).width;
     let scoreFrameWidth = scoreWidth + (SCORE_FRAME_HORIZONTAL_PADDING * 2);
 
-    let scoreLabelX = cx - ((scoreLabelWidth + scoreFrameWidth) / 2);
+    let scoreLabelX = CENTER_X - ((scoreLabelWidth + scoreFrameWidth) / 2);
     let scoreFrameX = scoreLabelX + scoreLabelWidth;
     let scoreX = scoreFrameX + SCORE_FRAME_HORIZONTAL_PADDING;
 
@@ -231,22 +254,30 @@ import sprites from './sprites.js';
   }
 
   const drawLifeIndicators = () => {
-    for (let i = 1; i <= playerCar.lives; i++) {
-      let y = canvas.height - sprites["life_indicator"].h - (50 * i);
-      drawTile("life_indicator", 50, y);
+    for (let i = 0; i < playerCar.lives; i++) {
+      let y = canvas.height - (sprites["life_indicator"].h * SCALE) - (50 * i);
+      drawTile("life_indicator", 50, y - CAR_BOTTOM_PADDING);
+    }
+  }
+
+  const drawPlayerCar = () => {
+
+
+
+    if (playerCar.status === PLAYER_STATUS.NORMAL) {
+      drawTile("car", playerCar.x, playerCar.y);
+    } else if (playerCar.status === PLAYER_STATUS.COLLIDED) {
+
+    } else if (playerCar.status === PLAYER_STATUS.CRASHED) {
+      drawTile("car_crashed", playerCar.x, playerCar.y);
     }
   }
 
   const drawBG = () => {
 
-    moveRoad();
     drawRoad();
-
-    moveSideways();
     drawSideways();
-
-    drawTile("car", playerCar.x, playerCar.y);
-
+    drawPlayerCar();
     drawLifeIndicators();
     drawScore();
 
@@ -267,22 +298,25 @@ import sprites from './sprites.js';
   }
 
   const resizeCanvas = () => {
-    currentWidth = window.innerWidth;
-    currentHeight = currentWidth * ratio;
+
+    let currentWidth, currentHeight;
+
+    if (window.innerHeight > window.innerWidth) {
+      currentWidth = window.innerWidth;
+      currentHeight = currentWidth;
+    } else {
+      currentHeight = window.innerHeight;
+      currentWidth = currentHeight;
+    }
 
     canvas.style.width = currentWidth + "px";
     canvas.style.height = currentHeight + "px";
+
   }
 
   const setupCanvas = () => {
-    currentWidth = WIDTH;
-    currentHeight = HEIGHT;
-    canvas.width = WIDTH;
-    canvas.height = HEIGHT;
-    // resizeCanvas();
+    resizeCanvas();
   }
-
-  let timeThen, timeNow, deltaTime;
 
   const hasCarJoinedNewLane = () => {
     if (playerCar.turningDir === DIR.LEFT) {
@@ -302,7 +336,7 @@ import sprites from './sprites.js';
       playerCar.x += (distance * playerCar.turningDir);
 
       if (hasCarJoinedNewLane()) { // animation done
-        timeThen = null;
+        lastTick = null;
         playerCar.isTurning = false; // is not turning anymore
         playerCar.turningDir = null; // no actual turning direction
         playerCar.x = LANES_POS[playerCar.laneIndex]; // set position for last frame
@@ -312,19 +346,18 @@ import sprites from './sprites.js';
 
   }
 
-  const render = time => {
+  const render = timeNow => {
     clearCanvas();
+    moveRoad();
+    moveSideways();
     drawBG();
 
-    if (!timeThen) { // it's the first frame
-      timeThen = time || performance.now();
-    }
+    deltaTime = (timeNow - lastTick) / 1000;
 
-    // deltaTime should be in the range [0 ~ 1]
-    deltaTime = (time - timeThen) / 1000;
+    movePlayerCar(timeNow);
 
-    movePlayerCar(time);
-    window.requestAnimationFrame(render);
+    lastTick = timeNow;
+    animLoop = window.requestAnimationFrame(render);
   }
 
   const initGame = () => {
@@ -333,6 +366,7 @@ import sprites from './sprites.js';
     initSideways();
 
     startTime = performance.now();
+    lastTick = performance.now();
 
     render();
   }
@@ -373,7 +407,7 @@ import sprites from './sprites.js';
 
     playerCar.isTurning = true;
 
-    if (x < WIDTH / 2) {
+    if (x < parseInt(canvas.style.width) / 2) {
       turnLeft();
     } else {
       turnRight();
