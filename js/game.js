@@ -22,12 +22,23 @@ import sprites from './sprites.js';
   const ROAD_Y_OFFSET = sprites["road"].h * SCALE;
   const RIGHT_SIDEWAYS_Y_OFFSET = sprites["right_sideways_1"].h * SCALE;
 
+  const SCORE_LABEL = "Score: ";
+  const SCORE_FRAME_VERTICAL_PADDING = 8;
+  const SCORE_FRAME_HORIZONTAL_PADDING = 10;
+  const SCORE_FRAME_HEIGHT = 28;
+
+  const GREEN = "#5AC546";
+
 
   const ratio = WIDTH / HEIGHT;
   let currentWidth = null;
   let currentHeight = null;
 
   const NUM_OF_LANES = 3;
+
+  // probabilities of popping up water, tree and field sideway
+  // sprites are weighted down for more natural and less distracting gameplay
+  const SIDEWAYS_PROBABILITIES = [0.45, 0.45, 0.05, 0.05];
 
   const CAR_BOTTOM_PADDING = 20;
 
@@ -36,7 +47,9 @@ import sprites from './sprites.js';
     RIGHT: 1
   }
 
+  const SCORE_GAIN = 2; // players gets 2 score per second
   let score = 0;
+  let startTime = null;
 
   const playerCar = {
     // set init position
@@ -46,7 +59,8 @@ import sprites from './sprites.js';
     speed: 2, // car speed or speed of moving road and sideways respectively
     isTurning: false,
     turningDir: null,
-    turningSpeed: 8 // pixels per second
+    turningSpeed: 8, // pixels per second
+    lives: 3 // 3 tries
   };
 
   const LANES_OFSSET = 100; // space between lanes
@@ -117,7 +131,20 @@ import sprites from './sprites.js';
 
   }
 
-  const getRandomSidewaySpriteIndex = () => Math.floor(Math.random() * 4) + 1;
+  const getRandomSidewaySpriteIndex = () => {
+    let num = Math.random();
+    let s = 0;
+    let lastIndex = SIDEWAYS_PROBABILITIES.length - 1;
+
+    for (let i = 0; i < lastIndex; ++i) {
+      s += SIDEWAYS_PROBABILITIES[i];
+      if (num < s) {
+        return i + 1;
+      }
+    }
+
+    return lastIndex + 1;
+  }
 
   const SIDEWAY_PREFIXES = ["left", "right"];
 
@@ -169,6 +196,47 @@ import sprites from './sprites.js';
 
   }
 
+  const drawScore = () => {
+
+    ctx.save();
+
+    ctx.font = "22px Lato";
+    ctx.textBaseline = "top";
+
+    score = parseInt((performance.now() - startTime) / 1000 * SCORE_GAIN);
+
+    let scoreWidth = ctx.measureText(score).width;
+    let scoreLabelWidth = ctx.measureText(SCORE_LABEL).width;
+    let scoreFrameWidth = scoreWidth + (SCORE_FRAME_HORIZONTAL_PADDING * 2);
+
+    let scoreLabelX = cx - ((scoreLabelWidth + scoreFrameWidth) / 2);
+    let scoreFrameX = scoreLabelX + scoreLabelWidth;
+    let scoreX = scoreFrameX + SCORE_FRAME_HORIZONTAL_PADDING;
+
+    let scoreFrameY = 50;
+
+    ctx.fillStyle = GREEN;
+
+    roundedRect(scoreFrameX, scoreFrameY, scoreFrameWidth, SCORE_FRAME_HEIGHT, 5);
+    ctx.fill();
+
+    ctx.fillStyle = "white";
+
+    ctx.fillText(SCORE_LABEL, scoreLabelX, 50);
+
+    ctx.fillText(score, scoreX, 50);
+
+    ctx.restore();
+
+  }
+
+  const drawLifeIndicators = () => {
+    for (let i = 1; i <= playerCar.lives; i++) {
+      let y = canvas.height - sprites["life_indicator"].h - (50 * i);
+      drawTile("life_indicator", 50, y);
+    }
+  }
+
   const drawBG = () => {
 
     moveRoad();
@@ -179,6 +247,23 @@ import sprites from './sprites.js';
 
     drawTile("car", playerCar.x, playerCar.y);
 
+    drawLifeIndicators();
+    drawScore();
+
+  }
+
+  const roundedRect = (x, y, width, height, radius) => {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
   }
 
   const resizeCanvas = () => {
@@ -246,6 +331,9 @@ import sprites from './sprites.js';
     setupCanvas();
     initRoad();
     initSideways();
+
+    startTime = performance.now();
+
     render();
   }
 

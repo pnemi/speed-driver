@@ -11,6 +11,12 @@ const tiles = {
     w: 40,
     h: 66
   },
+  "life_indicator": {
+    x: 4,
+    y: 456,
+    w: 32,
+    h: 42
+  },
   "left_sideways_1": {
     x: 4,
     y: 134,
