@@ -1,4 +1,5 @@
 import sprites from './sprites.js';
+import {easeOutCubic} from "./utils.js";
 
 (function() {
 
@@ -51,7 +52,7 @@ import sprites from './sprites.js';
   }
 
   // flags to indicate whether car is good, collided recently or has crashed
-  const PLAYER_STATUS = {
+  const CAR_CONDITION = {
     NORMAL: 1,
     COLLIDED: 2,
     CRASHED: 3
@@ -61,28 +62,40 @@ import sprites from './sprites.js';
   let score = 0;
   let startTime = null;
 
+  const COLLISION_PROTECTION_TIME = 3000; // 3 seconds protection since last collision
+  const COLLISION_BLINKING_FREQ = 100;
+
   const playerCar = {
     // set init position
     x: CENTER_X - (sprites["car"].w * SCALE / 2),
     y: HEIGHT - (sprites["car"].h * SCALE) - CAR_BOTTOM_PADDING,
     laneIndex: 1, // index of lane
     speed: 2, // car speed or speed of moving road and sideways respectively
+    currentSpeed: 2,
     isTurning: false,
     turningDir: null,
     turningSpeed: 200 * SCALE, // pixels per second
     lives: 3, // 3 tries
-    status: PLAYER_STATUS.NORMAL
+    condition: CAR_CONDITION.NORMAL,
+    collisionTime: null // timestamp when car collided
   };
 
-  const LANES_OFSSET = 100; // space between lanes
+  const LANES_OFSSET = sprites["left_sideways_1"].w;
 
-  const LANE_WIDTH = sprites["road"].w / NUM_OF_LANES;
+  const ROAD_GRASS_PADDING = 45 * 2; // road sprite has grass on both sides
+  const LANE_WIDTH = (sprites["road"].w - ROAD_GRASS_PADDING) / NUM_OF_LANES;
   const LANE_CX = LANE_WIDTH / 2;
 
+  // const LANES_CENTERS = [
+  //   ~~(LANES_OFSSET + LANE_CX),
+  //   ~~(LANES_OFSSET + LANE_WIDTH + LANE_CX),
+  //   ~~(LANES_OFSSET + LANE_WIDTH * 2 + LANE_CX)
+  // ];
+
   const LANES_CENTERS = [
-    ~~LANE_CX,
-    ~~(LANE_WIDTH + LANE_CX),
-    ~~(LANE_WIDTH * 2 + LANE_CX)
+    ~~(CENTER_X - 95),
+    ~~(CENTER_X + 5),
+    ~~(CENTER_X + 105)
   ];
 
   const LANES_POS = [
@@ -115,6 +128,7 @@ import sprites from './sprites.js';
     left: [],
     right: []
   };
+  let obstackles = [];
 
   const initRoad = () => {
     // calc number of road blocks needed to draw on canvas from up to bottom
@@ -128,9 +142,7 @@ import sprites from './sprites.js';
   }
 
   const drawRoad = () => {
-    roadBlocks.forEach(block => {
-      drawTile("road", ROAD_X_OFFSET, block.y);
-    })
+    roadBlocks.forEach(block => drawTile("road", ROAD_X_OFFSET, ~~block.y));
   }
 
   const moveRoad = () => {
@@ -150,7 +162,7 @@ import sprites from './sprites.js';
       roadBlocks.pop();
     }
 
-    roadBlocks.forEach((item, i, arr) => arr[i].y += playerCar.speed);
+    roadBlocks.forEach((item, i, arr) => arr[i].y += playerCar.currentSpeed);
 
   }
 
@@ -190,7 +202,7 @@ import sprites from './sprites.js';
     SIDEWAY_PREFIXES.forEach(side => {
       let xOffset = side === "left" ? LEFT_SIDEWAYS_X_OFFSET : RIGHT_SIDEWAYS_X_OFFSET;
       sidewaysBlocks[side].forEach(block => {
-        drawTile(`${side}_sideways_${block.index}`, xOffset, block.y);
+        drawTile(`${side}_sideways_${block.index}`, xOffset, ~~block.y);
       })
     })
   }
@@ -214,7 +226,7 @@ import sprites from './sprites.js';
         sidewaysBlocks[side].pop();
       }
 
-      sidewaysBlocks[side].forEach((item, i, arr) => arr[i].y += playerCar.speed);
+      sidewaysBlocks[side].forEach((item, i, arr) => arr[i].y += playerCar.currentSpeed);
     });
 
   }
@@ -262,13 +274,13 @@ import sprites from './sprites.js';
 
   const drawPlayerCar = () => {
 
-
-
-    if (playerCar.status === PLAYER_STATUS.NORMAL) {
+    if (playerCar.condition === CAR_CONDITION.NORMAL) {
       drawTile("car", playerCar.x, playerCar.y);
-    } else if (playerCar.status === PLAYER_STATUS.COLLIDED) {
-
-    } else if (playerCar.status === PLAYER_STATUS.CRASHED) {
+    } else if (playerCar.condition === CAR_CONDITION.COLLIDED) {
+      if (Math.floor(Date.now() / COLLISION_BLINKING_FREQ) % 2) {
+        drawTile("car", playerCar.x, playerCar.y);
+      }
+    } else if (playerCar.condition === CAR_CONDITION.CRASHED) {
       drawTile("car_crashed", playerCar.x, playerCar.y);
     }
   }
@@ -277,6 +289,7 @@ import sprites from './sprites.js';
 
     drawRoad();
     drawSideways();
+    drawObstackles();
     drawPlayerCar();
     drawLifeIndicators();
     drawScore();
@@ -344,12 +357,98 @@ import sprites from './sprites.js';
 
     }
 
+    // set normal car condition back to normal after some time
+    if (playerCar.condition === CAR_CONDITION.COLLIDED) {
+      let elapsed = (performance.now() - playerCar.collisionTime) / COLLISION_PROTECTION_TIME;
+      playerCar.currentSpeed = playerCar.speed * easeOutCubic(elapsed);
+      if (performance.now() - playerCar.collisionTime > COLLISION_PROTECTION_TIME) {
+        playerCar.condition = CAR_CONDITION.NORMAL;
+      }
+    }
+
+  }
+
+  const isOutOfVerticalBounds = y => {
+    return y > HEIGHT;
+  }
+
+  const moveObstackles = () => {
+    // move obstackles with speed of player's car to simulate they are stationary
+    obstackles.forEach((item, i, arr) => arr[i].y += playerCar.currentSpeed);
+    // clean out of bounds obstackles from drawing pool
+    obstackles = obstackles.filter(o => !o.wasHit && !isOutOfVerticalBounds(o.y));
+  }
+
+  const drawObstackles = () => {
+    obstackles.forEach(o => drawTile("obstackle", o.x, o.y));
+  }
+
+  const pickRandomLane = () => ~~(Math.random() * NUM_OF_LANES);
+
+  const genObstackles = () => {
+    if (Math.random() < 0.01) {
+      let lane = pickRandomLane();
+      obstackles.push({
+        wasHit: false, // will be true when car hits obstackle
+        lane: lane,
+        x: LANES_CENTERS[lane] - (sprites["obstackle"].w * SCALE / 2),
+        y: -(sprites["obstackle"].h * SCALE) // hide it above out of bounds for now
+      })
+    }
+  }
+
+  const isOverlapping = (sprite1, r1x, r1y, sprite2, r2x, r2y) => {
+
+    let r1w = sprites[sprite1].w * SCALE;
+    let r1h = sprites[sprite1].h * SCALE;
+
+    let r2w = sprites[sprite2].w * SCALE;
+    let r2h = sprites[sprite2].h * SCALE;
+
+    return !(r1x + r1w < r2x ||
+             r1y + r1h < r2y ||
+             r1x > r2x + r2w ||
+             r1y > r2y + r2h);
+
+  }
+
+  const playerCollided = () => {
+    // car collided while in good condition
+    if (playerCar.condition === CAR_CONDITION.NORMAL) {
+
+      playerCar.lives--;
+
+      // player is still alive
+      if (playerCar.lives > 0) {
+        playerCar.condition = CAR_CONDITION.COLLIDED;
+      } else {
+        playerCar.condition = CAR_CONDITION.CRASHED;
+      }
+
+      playerCar.collisionTime = performance.now(); // car collision timestamp
+
+    }
+
+  }
+
+  const checkCollisions = () => {
+    obstackles.forEach((item, i, arr) => {
+      // check only if it hasn't already been hit
+      if (!item.wasHit && isOverlapping("car", playerCar.x, playerCar.y,
+                        "obstackle", item.x, item.y)) {
+        arr[i].wasHit = true;
+        playerCollided();
+      }
+    });
   }
 
   const render = timeNow => {
     clearCanvas();
     moveRoad();
     moveSideways();
+    genObstackles();
+    moveObstackles();
+    checkCollisions();
     drawBG();
 
     deltaTime = (timeNow - lastTick) / 1000;

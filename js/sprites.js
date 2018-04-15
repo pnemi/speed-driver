@@ -19,9 +19,9 @@ const sprites = {
   },
   "obstackle": {
     type: "obstackle",
-    x: 176,
+    x: 177,
     y: 132,
-    w: 50,
+    w: 48,
     h: 18
   },
   "yellow_car": {
