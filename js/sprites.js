@@ -1,3 +1,11 @@
+const SPRITE_TYPE = {
+  OBSTACLE: 2,
+  FAST_CAR: 3,
+  CAR:      4,
+  SLOW_CAR: 5,
+  TRUCK:    6
+}
+
 const sprites = {
   "road": {
     x: 262,
@@ -17,54 +25,52 @@ const sprites = {
     w: 40,
     h: 66
   },
-  "obstackle": {
-    type: "obstackle",
+  "obstacle": {
+    type: SPRITE_TYPE.OBSTACLE,
     x: 177,
     y: 132,
     w: 48,
     h: 18
   },
   "yellow_car": {
-    type: "other_car",
+    type: SPRITE_TYPE.FAST_CAR,
     x: 440,
     y: 175,
     w: 40,
-    h: 62
+    h: 62,
+    speedCoeff: 0.8
   },
   "purple_car": {
-    type: "other_car",
+    type: SPRITE_TYPE.SLOW_CAR,
     x: 352,
     y: 228,
     w: 30,
-    h: 46
+    h: 46,
+    speedCoeff: 0.4
   },
   "green_car": {
-    type: "other_car",
+    type: SPRITE_TYPE.CAR,
     x: 44,
     y: 452,
     w: 34,
-    h: 46
-  },
-  "green_car": {
-    type: "other_car",
-    x: 44,
-    y: 452,
-    w: 34,
-    h: 46
+    h: 46,
+    speedCoeff: 0.7
   },
   "orange_truck": {
-    type: "other_car",
+    type: SPRITE_TYPE.TRUCK,
     x: 436,
     y: 88,
     w: 46,
-    h: 84
+    h: 84,
+    speedCoeff: 0.3
   },
   "blue_truck": {
-    type: "other_car",
+    type: SPRITE_TYPE.TRUCK,
     x: 436,
     y: 0,
     w: 46,
-    h: 84
+    h: 84,
+    speedCoeff: 0.3
   },
   "life_indicator": {
     x: 4,
@@ -121,4 +127,6 @@ const sprites = {
     h: 154
   }
 };
-export default sprites;
+export {
+  sprites, SPRITE_TYPE
+};
