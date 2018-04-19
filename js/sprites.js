@@ -1,9 +1,7 @@
 const SPRITE_TYPE = {
   OBSTACLE: 2,
-  FAST_CAR: 3,
-  CAR:      4,
-  SLOW_CAR: 5,
-  TRUCK:    6
+  SLOW_VEHICLE: 3,
+  FAST_VEHICLE: 4
 }
 
 const sprites = {
@@ -25,6 +23,48 @@ const sprites = {
     w: 40,
     h: 66
   },
+  "explosion_0": {
+    x: 396,
+    y: 161,
+    w: 16,
+    h: 14
+  },
+  "explosion_1": {
+    x: 480,
+    y: 276,
+    w: 22,
+    h: 26
+  },
+  "explosion_2": {
+    x: 163,
+    y: 482,
+    w: 24,
+    h: 28
+  },
+  "explosion_3": {
+    x: 384,
+    y: 244,
+    w: 36,
+    h: 38
+  },
+  "explosion_4": {
+    x: 80,
+    y: 452,
+    w: 40,
+    h: 40
+  },
+  "explosion_5": {
+    x: 440,
+    y: 240,
+    w: 38,
+    h: 40
+  },
+  "explosion_6": {
+    x: 120,
+    y: 452,
+    w: 38,
+    h: 42
+  },
   "obstacle": {
     type: SPRITE_TYPE.OBSTACLE,
     x: 177,
@@ -33,7 +73,7 @@ const sprites = {
     h: 18
   },
   "yellow_car": {
-    type: SPRITE_TYPE.FAST_CAR,
+    type: SPRITE_TYPE.FAST_VEHICLE,
     x: 440,
     y: 175,
     w: 40,
@@ -41,7 +81,7 @@ const sprites = {
     speedCoeff: 0.8
   },
   "purple_car": {
-    type: SPRITE_TYPE.SLOW_CAR,
+    type: SPRITE_TYPE.SLOW_VEHICLE,
     x: 352,
     y: 228,
     w: 30,
@@ -49,28 +89,28 @@ const sprites = {
     speedCoeff: 0.4
   },
   "green_car": {
-    type: SPRITE_TYPE.CAR,
+    type: SPRITE_TYPE.FAST_VEHICLE,
     x: 44,
     y: 452,
     w: 34,
     h: 46,
-    speedCoeff: 0.7
+    speedCoeff: 0.75
   },
   "orange_truck": {
-    type: SPRITE_TYPE.TRUCK,
+    type: SPRITE_TYPE.SLOW_VEHICLE,
     x: 436,
     y: 88,
     w: 46,
     h: 84,
-    speedCoeff: 0.3
+    speedCoeff: 0.35
   },
   "blue_truck": {
-    type: SPRITE_TYPE.TRUCK,
+    type: SPRITE_TYPE.SLOW_VEHICLE,
     x: 436,
     y: 0,
     w: 46,
     h: 84,
-    speedCoeff: 0.3
+    speedCoeff: 0.35
   },
   "life_indicator": {
     x: 4,

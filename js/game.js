@@ -1,6 +1,5 @@
 import {sprites, SPRITE_TYPE} from './sprites.js';
-import {easeOutCubic, pickRandomProperty} from "./utils.js";
-import gridPresets from "./grid_presets.js";
+import {shuffleArray, pickRandomProperty} from "./utils.js";
 
 (function() {
 
@@ -25,12 +24,15 @@ import gridPresets from "./grid_presets.js";
   const SCALE = 2; // scale everything by 2
 
   const PLAYER_CAR_BOTTOM_OFFSET = 20;
-  const OTHER_carPool_SPEED = 2; // absolute multiplicative car speed constant
+  const OTHER_CARS_SPEED = 2; // absolute multiplicative car speed constant
   const NUM_OF_LANES = 3;
   const LIVES_TOTAL = 3;
   const SCORE_GAIN_PS = 2; // players gets 2 GAME.score per second
-  const COLLISION_PROTECTION_TIME = 3000; // 3 seconds protection since last collision
-  const COLLISION_BLINKING_FREQ = 100;
+  const COLLISION_PROTECTION_TIME = 3000; // x seconds protection since last collision
+  const COLLISION_BLINKING_FREQ = 50;
+  const CRASH_ANIM_DURATION = 600;
+  const NUM_OF_CRASH_SPRITES = 7;
+  const CAR_ROTATION_RAD_INC = 1 * Math.PI / 180;
 
   /**
    * Flags to indicate whether car is good, collided recently or has crashed.
@@ -42,6 +44,8 @@ import gridPresets from "./grid_presets.js";
     CRASHED: 3
   }
 
+  let justCollidedWith = null;
+
   /**
    * Player's car instance.
    * @type {Object}
@@ -50,15 +54,20 @@ import gridPresets from "./grid_presets.js";
     // set init position
     x: CANVAS_CX - (sprites["car"].w * SCALE / 2),
     y: CANVAS_H - (sprites["car"].h * SCALE) - PLAYER_CAR_BOTTOM_OFFSET,
+    lastLaneIndex: 1,
     laneIndex: 1, // index of lane
     speed: 4, // car speed or speed of moving road and sideways respectively
     currentSpeed: 4,
+    minSpeed: 4,
+    maxSpeed: 12,
     isTurning: false,
     turningDir: null,
-    turningSpeed: 200 * SCALE, // pixels per second
+    turningSpeed: 280 * SCALE, // pixels per second
     lives: LIVES_TOTAL, // 3 tries
     condition: CAR_CONDITION.NORMAL,
     collisionTime: null, // getTimestamp when car collided
+    immunityStartTime: null,
+    rotation: 0
   };
 
   /**
@@ -73,8 +82,29 @@ import gridPresets from "./grid_presets.js";
     deltaTime: null,      // delta time since last tick
     score: 0,
     startTime: null,      // getTimestamp when game started
-    pauseTime: null       // getTimestamp for pausing
+    pauseTime: null,      // getTimestamp for pausing
+    obstaclesPerBatch: 2, // number of cars and obstackles per batch
+    maxObstacles: 3,
+    minObstacles: 2,
+    gridCols: 3,
+    gridSize: 9,           // grid size (rows * cells)
+    gridColSize: 300,      // was 200
+    gridColSizeMin: 300,
+    gridColSizeMax: 150,
+    lastBoard: [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
   }
+
+  /**
+   * Extra empty row prepending before board to place path end for A*.
+   * @type {Array}
+   */
+  const BOARD_PREFIX_ROW = [Array(3).fill(1)];
+
+  /**
+   * Extra empty row appending after board to place path start (player's car) for A*.
+   * @type {Array}
+   */
+  const BOARD_SUFFIX_ROW = [Array(3).fill(1)];
 
   // name bindings for key codes
   const KEY = {
@@ -97,7 +127,7 @@ import gridPresets from "./grid_presets.js";
   const GREEN = "#5AC546";
 
   // tracks passed road length in order to determine when to generate next obstaclesPool batch
-  let DELTA_PX = CANVAS_H;
+  let passedPX = -(CANVAS_H / 2);
 
   const ROAD_OFFSET = {
     x: sprites["left_sideways_1"].w,
@@ -149,7 +179,7 @@ import gridPresets from "./grid_presets.js";
     .entries(sprites)
     .forEach(o => {
       if ("type" in o[1]) {
-         TRAFFIC_SPRITES_POOL[o[1].type] = o[0];
+         TRAFFIC_SPRITES_POOL[o[0]] = o[1].type;
       };
     });
 
@@ -174,7 +204,7 @@ import gridPresets from "./grid_presets.js";
     right: []
   };
   let obstaclesPool = [];
-  let carPool = [];
+  let carsPool = [];
 
   /**
    * Clears canvas context.
@@ -232,7 +262,7 @@ import gridPresets from "./grid_presets.js";
    * Draws objects from cars pool onto canvas context.
    */
   const drawCars = () => {
-    carPool.forEach(o => drawTile(o.sprite, o.x, o.y));
+    carsPool.forEach(o => drawTile(o.sprite, o.x, o.y));
   }
 
   /**
@@ -240,23 +270,58 @@ import gridPresets from "./grid_presets.js";
    */
   const drawPlayerCar = () => {
 
+    ctx.save();
+
+    let tx = PLAYER.x + (sprites["car"].w / 4 * SCALE);
+    let ty = PLAYER.y + (sprites["car"].h / 4 * SCALE);
+
+    let x = -(sprites["car"].w / 4 * SCALE);
+    let y = -(sprites["car"].h / 4 * SCALE);
+
+    ctx.translate(tx, ty);
+    ctx.rotate(PLAYER.rotation);
+
     if (PLAYER.condition === CAR_CONDITION.NORMAL) {
 
-      drawTile("car", PLAYER.x, PLAYER.y);
+      drawTile("car", x, y);
 
     } else if (PLAYER.condition === CAR_CONDITION.COLLIDED) {
 
       let shouldBlink = Math.floor(Date.now() / COLLISION_BLINKING_FREQ) % 2
 
       if (shouldBlink) {
-        drawTile("car", PLAYER.x, PLAYER.y);
+        drawTile("car", x, y);
       }
 
     } else if (PLAYER.condition === CAR_CONDITION.CRASHED) {
 
-      drawTile("car_crashed", PLAYER.x, PLAYER.y);
+
+      let timeElapsed = (getTimestamp() - PLAYER.collisionTime);
+
+      if (timeElapsed <= CRASH_ANIM_DURATION) {
+
+        let interval = CRASH_ANIM_DURATION / NUM_OF_CRASH_SPRITES;
+        let seqNumber = ~~(timeElapsed / interval);
+        let sprite = `explosion_${seqNumber}`;
+
+        let expX = x + (((sprites["car"].w / 2) - (sprites[sprite].w / 2)) * SCALE);
+        let expY = y + (((sprites["car"].h / 2) - (sprites[sprite].h / 2)) * SCALE);
+
+        if (seqNumber >= 3) {
+          drawTile("car_crashed", x, y);
+        } else {
+          drawTile("car", x, y);
+        }
+        drawTile(`explosion_${seqNumber}`, expX, expY);
+
+      } else {
+        drawTile("car_crashed", x, y);
+      }
+
 
     }
+
+    ctx.restore();
   }
 
   /**
@@ -326,6 +391,22 @@ import gridPresets from "./grid_presets.js";
 
   }
 
+  const adjustDifficulty = () => {
+    if (!GAME.isGameover) {
+      let newSpeed = PLAYER.speed + (PLAYER.speed / 8000);
+      if (newSpeed <= PLAYER.maxSpeed) {
+        PLAYER.speed = newSpeed;
+        if (PLAYER.condition !== CAR_CONDITION.COLLIDED) {
+          PLAYER.currentSpeed = newSpeed;
+        }
+      }
+
+      if (GAME.score > 100) {
+        GAME.obstaclesPerBatch = GAME.maxObstacles;
+      }
+    }
+  }
+
   // COLLISIONS
   // ––––––––––
 
@@ -341,8 +422,8 @@ import gridPresets from "./grid_presets.js";
    */
   const doesRectOverlap = (sprite1, r1x, r1y, sprite2, r2x, r2y) => {
 
-    let r1w = sprites[sprite1].w * SCALE;
-    let r1h = sprites[sprite1].h * SCALE;
+    let r1w = (sprites[sprite1].w) * SCALE;
+    let r1h = (sprites[sprite1].h) * SCALE;
 
     let r2w = sprites[sprite2].w * SCALE;
     let r2h = sprites[sprite2].h * SCALE;
@@ -361,12 +442,14 @@ import gridPresets from "./grid_presets.js";
    */
   const playerCollided = () => {
 
+    PLAYER.collisionTime = getTimestamp(); // car collision getTimestamp
+
     // car collided while in good condition
     if (PLAYER.condition === CAR_CONDITION.NORMAL) {
 
       PLAYER.condition = CAR_CONDITION.COLLIDED;
-      PLAYER.collisionTime = getTimestamp(); // car collision getTimestamp
       PLAYER.lives--;
+      PLAYER.immunityStartTime = getTimestamp();
 
     }
 
@@ -376,10 +459,6 @@ import gridPresets from "./grid_presets.js";
       PLAYER.currentSpeed = 0;
       GAME.isGameover = true;
     }
-
-  }
-
-  const doesOverlapWithOtherObjects = obj => {
 
   }
 
@@ -396,65 +475,175 @@ import gridPresets from "./grid_presets.js";
         playerCollided();
       }
     });
+    carsPool.forEach((item, i, arr) => {
+      // check only if it hasn't already been hit
+      if (doesRectOverlap("car", PLAYER.x, PLAYER.y,
+                        item.sprite, item.x, item.y)) {
+        arr[i].wasHit = true;
+        justCollidedWith = arr[i];
+        if (PLAYER.isTurning && (PLAYER.lastLaneIndex !== justCollidedWith.lane)) {
+          if (PLAYER.turningDir === DIR.LEFT) {
+            PLAYER.turningDir = DIR.RIGHT;
+          } else {
+            PLAYER.turningDir = DIR.LEFT;
+          }
+          PLAYER.laneIndex = PLAYER.lastLaneIndex;
+        }
+        playerCollided();
+      }
+    });
+  }
+
+  const toMatrix = (arr, width) =>
+      arr.reduce((rows, key, index) => (index % width == 0 ? rows.push([key])
+        : rows[rows.length-1].push(key)) && rows, []);
+
+  const placeRandomTraffic = board => {
+    return board.map(row => {
+      return row.map(isWall => {
+        if (!isWall) {
+          return pickRandomProperty(TRAFFIC_SPRITES_POOL);
+        } else {
+          return null; // not placing anything here
+        }
+      })
+    })
+  }
+
+  const fixFastVehicles = (board, rowIndex, colIndex) => {
+    for (let j = rowIndex; (j >= 0 && j > rowIndex - 2); j--) {
+      let type = TRAFFIC_SPRITES_POOL[board[j][colIndex]];
+      if (type === SPRITE_TYPE.OBSTACLE ||
+          type === SPRITE_TYPE.SLOW_VEHICLE) {
+        board[j][colIndex] = null;
+      }
+    }
+  }
+
+  const fixSlowVehicles = (board, rowIndex, colIndex) => {
+    if (rowIndex - 1 >= 0) {
+    if (TRAFFIC_SPRITES_POOL[board[rowIndex - 1][colIndex]] === SPRITE_TYPE.OBSTACLE) {
+        board[rowIndex - 1][colIndex] = null;
+      }
+    }
+  }
+
+  const filterInvalidTraffic = board => {
+    for (let rowIndex = board.length - 1; rowIndex >= 0; rowIndex--) {
+      for (let colIndex = board[rowIndex].length - 1; colIndex >= 0; colIndex--) {
+        let sprite = board[rowIndex][colIndex];
+        if (sprite) {
+          let type = TRAFFIC_SPRITES_POOL[sprite];
+          if (type === SPRITE_TYPE.FAST_VEHICLE) {
+            fixFastVehicles(board, rowIndex, colIndex);
+          } else if (type === SPRITE_TYPE.SLOW_VEHICLE) {
+            fixSlowVehicles(board, rowIndex, colIndex);
+          }
+        }
+      }
+    }
   }
 
   /**
    * Generates new batch of obstacles and cars according to given preset.
+   * A* graph grid consists of following:
+   *    - extra empty row for path end to place in
+   *    - newly generated and validated 3x3 matrix board
+   *    - 3x3 matrix board from last time
+   *    - extra empty row for path start to place in (player's car)
    */
   const genTraffic = () => {
 
-    let preset = gridPresets[~~(Math.random() * gridPresets.length)];
-
-    // console.log(preset);
-
-    // flip
-    // obstaclesPoolGrid.map(row => row.reverse());
+    let gridWindowHeight = (GAME.gridColSize * SCALE * 3);
 
     // we passed whole length so we should generate new batch of obstaclesPool
-    if (DELTA_PX >= CANVAS_H) {
-      DELTA_PX = 0; // reset counter
+    if (passedPX >= gridWindowHeight) {
 
-      preset.forEach((rowArr, row) => {
-        rowArr.forEach((type, laneIndex) => {
-          const GRID_Y_OFFSET = 0; // was 20
-          const GRID_CELL_HEIGHT = CANVAS_H / preset.length; // was 20
-          if (type > 0) {
+      const newBoard = Array(GAME.obstaclesPerBatch)
+        .fill(0)
+        .concat(Array(GAME.gridSize - GAME.obstaclesPerBatch).fill(1));
 
-            // car generation
-            // let spritePool = TRAFFIC_SPRITES_POOL[type];
-            // let chosenCarIndex = ~~(Math.random() * spritePool.length);
-            let sprite = TRAFFIC_SPRITES_POOL[type];
+      let newBoardMatrix,
+          fullBoard, // contains last board and new one
+          graphGrid;
+
+      let isValid = false;
+      do {
+
+        shuffleArray(newBoard); // in place shuffle
+
+        newBoardMatrix = toMatrix(newBoard, 3);
+
+        fullBoard = newBoardMatrix.concat(GAME.lastBoard);
+
+        graphGrid = BOARD_PREFIX_ROW
+          .concat(fullBoard)
+          .concat(BOARD_SUFFIX_ROW);
+
+        let graph = new Graph(graphGrid);
+
+        let end = graph.grid[0][1];
+        let start = graph.grid[graphGrid.length - 1][1];
+
+        isValid = astar.search(graph, start, end).length;
+        // console.log(newBoard.join(", ") + " => " + isValid);
+      } while (!isValid);
+
+      // console.log(graphGrid.join("\n"));
+
+      fullBoard = placeRandomTraffic(fullBoard);
+
+      // console.log(fullBoard.join("\n"));
+
+      filterInvalidTraffic(fullBoard);
+
+      // console.log(fullBoard.join("\n"));
+
+
+      let newBoardFinal = fullBoard.slice(0, 3);
+
+
+      GAME.lastBoard = newBoardFinal;
+
+      // console.log(passedPX);
+      passedPX = 0; // reset counter
+
+      // console.log("NEW");
+
+      newBoardFinal.forEach((row, rowIndex) => {
+        row.forEach((sprite, laneIndex) => {
+          if (sprite !== null) {
+
+            let type = TRAFFIC_SPRITES_POOL[sprite];
+
+            // console.log(`${sprite}: ${laneIndex}, ${rowIndex}`);
+
+
+            let y = (rowIndex * GAME.gridColSize) + (GAME.gridColSize / 2) - (sprites[sprite].h / 2);
 
             let object = {
               sprite: sprite,
               wasHit: false, // will be true and then removed when car hits obstacle
               lane: laneIndex,
               x: LANES_CENTERS[laneIndex] - (sprites[sprite].w * SCALE / 2),
-              y: -(GRID_Y_OFFSET - (sprites[sprite].h / 2) + ((GRID_CELL_HEIGHT / 2) * row) + 50)  // hide it above out of bounds for now
+              y: y * SCALE - gridWindowHeight  // hide it above out of bounds for now
             };
 
-            if (type === SPRITE_TYPE.OBSTACLE) {
+            if (sprites[sprite].type === SPRITE_TYPE.OBSTACLE) {
               obstaclesPool.push(object);
             } else {
-              carPool.push(object);
+              carsPool.push(object);
             }
-
           }
         })
       })
+
+      let newGridColSize = GAME.gridColSize - 3;
+      if (newGridColSize >= GAME.gridColSizeMax) {
+        GAME.gridColSize = newGridColSize;
+      }
+
     }
-
-
-    // if (Math.random() < 0.04) {
-    //   let lane = pickRandomLane();
-    //   obstaclesPool.push({
-    //     sprite: "obstacle",
-    //     wasHit: false, // will be true and then removed when car hits obstacle
-    //     lane: lane,
-    //     x: LANES_CENTERS[lane] - (sprites["obstacle"].w * SCALE / 2),
-    //     y: -(sprites["obstacle"].h * SCALE) // hide it above out of bounds for now
-    //   })
-    // }
   }
 
   // MOVING
@@ -548,7 +737,7 @@ import gridPresets from "./grid_presets.js";
    */
   const moveObstacles = () => {
     // move obstaclesPool with speed of player's car to simulate they are stationary
-    obstaclesPool.forEach((item, i, arr) => arr[i].y += (PLAYER.currentSpeed *  SCALE));
+    obstaclesPool.forEach((item, i, arr) => arr[i].y += (PLAYER.currentSpeed * SCALE));
     // clean out of bounds obstaclesPool from drawing pool
     obstaclesPool = obstaclesPool.filter(o => !o.wasHit && !isOutOfVerticalBounds(o.y));
   }
@@ -558,13 +747,13 @@ import gridPresets from "./grid_presets.js";
    */
   const moveCars = () => {
     // move obstaclesPool with speed of player's car to simulate they are stationary
-    carPool.forEach((item, i, arr) => {
+    carsPool.forEach((item, i, arr) => {
       let sprite = arr[i].sprite;
-      let speed = OTHER_carPool_SPEED * sprites[sprite].speedCoeff;
-      arr[i].y += (PLAYER.currentSpeed - speed);
+      let speed = OTHER_CARS_SPEED * sprites[sprite].speedCoeff;
+      arr[i].y += (PLAYER.currentSpeed - speed) * SCALE;
     });
     // clean out of bounds obstaclesPool from drawing pool
-    carPool = carPool.filter(o => !isOutOfVerticalBounds(o.y));
+    carsPool = carsPool.filter(o => !isOutOfVerticalBounds(o.y));
   }
 
   /**
@@ -585,31 +774,57 @@ import gridPresets from "./grid_presets.js";
    */
   const movePlayerCar = () => {
 
-    if (PLAYER.isTurning) {
+    if (PLAYER.isTurning && !GAME.isGameover) {
 
       let distance = PLAYER.turningSpeed * GAME.deltaTime;
 
       PLAYER.x += (distance * PLAYER.turningDir);
+      PLAYER.rotation += (CAR_ROTATION_RAD_INC * PLAYER.turningDir);
 
       if (hasCarJoinedNewLane()) { // animation done
         GAME.lastTick = null;
         PLAYER.isTurning = false; // is not turning anymore
         PLAYER.turningDir = null; // no actual turning direction
+        PLAYER.lastLaneIndex = PLAYER.laneIndex;
         PLAYER.x = PLAYER_CAR_LANES_POS[PLAYER.laneIndex]; // set position for last frame
       }
 
+    } else {
+      if (PLAYER.rotation !== 0) {
+        if (PLAYER.rotation < 0) {
+          PLAYER.rotation += CAR_ROTATION_RAD_INC;
+        } else {
+          PLAYER.rotation -= CAR_ROTATION_RAD_INC;
+        }
+      }
     }
 
     // set normal car condition back to normal after some time
     if (PLAYER.condition === CAR_CONDITION.COLLIDED) {
       let elapsed = (getTimestamp() - PLAYER.collisionTime) / COLLISION_PROTECTION_TIME;
-      PLAYER.currentSpeed = PLAYER.speed * easeOutCubic(elapsed);
-      if (getTimestamp() - PLAYER.collisionTime > COLLISION_PROTECTION_TIME) {
+
+      if (elapsed < 0.2) {
+        let newSpeed = PLAYER.currentSpeed - 0.5;
+        if (newSpeed >= PLAYER.speed / 4) {
+          PLAYER.currentSpeed = newSpeed;
+        }
+        if (justCollidedWith && justCollidedWith.sprite !== "obstacle") {
+          justCollidedWith.y -= (PLAYER.currentSpeed * 2);
+        }
+      } else {
+        let newSpeed = PLAYER.currentSpeed + 0.1;
+        if (newSpeed <= PLAYER.speed) {
+          PLAYER.currentSpeed = newSpeed;
+        }
+      }
+
+      if (getTimestamp() - PLAYER.immunityStartTime > COLLISION_PROTECTION_TIME) {
         PLAYER.condition = CAR_CONDITION.NORMAL;
+        PLAYER.currentSpeed = PLAYER.speed;
       }
     }
 
-    DELTA_PX += PLAYER.currentSpeed;
+    passedPX += PLAYER.currentSpeed;
 
   }
 
@@ -629,7 +844,7 @@ import gridPresets from "./grid_presets.js";
 
   /**
    * Returns whether y coordinate is bigger than canvas height.
-   * @param  {[type]}  y y coordinate
+   * @param  {Number}  y y coordinate
    * @return {Boolean}   true when y is bigger than height
    */
   const isOutOfVerticalBounds = y => y > CANVAS_H;
@@ -713,10 +928,12 @@ import gridPresets from "./grid_presets.js";
 
     draw();
 
+    adjustDifficulty();
+
 
     GAME.deltaTime = (timeNow - GAME.lastTick) / 1000;
-
     GAME.lastTick = timeNow;
+
     GAME.rafLoop = window.requestAnimationFrame(render);
 
   }
@@ -728,6 +945,7 @@ import gridPresets from "./grid_presets.js";
     if (PLAYER.laneIndex + 1 < NUM_OF_LANES) {
       PLAYER.isTurning = true;
       PLAYER.turningDir = DIR.RIGHT;
+      PLAYER.lastLaneIndex = PLAYER.laneIndex;
       PLAYER.laneIndex += 1;
     }
   }
@@ -739,6 +957,7 @@ import gridPresets from "./grid_presets.js";
     if (PLAYER.laneIndex - 1 >= 0) {
       PLAYER.isTurning = true;
       PLAYER.turningDir = DIR.LEFT;
+      PLAYER.lastLaneIndex = PLAYER.laneIndex;
       PLAYER.laneIndex -= 1;
     }
   }
@@ -769,17 +988,21 @@ import gridPresets from "./grid_presets.js";
     // stop animation
     stopAnimLoop();
 
-    // clear obstaclesPool and other carPool from pool
+    // clear obstaclesPool and other carsPool from pool
     obstaclesPool = [];
-    carPool = [];
+    carsPool = [];
 
     // reset gameplay flags
     GAME.startTime = getTimestamp();
     GAME.isPaused = false;
     GAME.isGameover = false;
+    GAME.score = 0;
+    GAME.obstaclesPerBatch = GAME.minObstacles;
+    GAME.gridColSize = GAME.gridColSizeMin;
 
     // reset player flags
-    PLAYER.currentSpeed = PLAYER.speed;
+    PLAYER.currentSpeed = PLAYER.minSpeed;
+    PLAYER.speed = PLAYER.minSpeed;
     PLAYER.isTurning = false;
     PLAYER.turningDir = null;
     PLAYER.lives = LIVES_TOTAL;
