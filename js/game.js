@@ -809,7 +809,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
           PLAYER.currentSpeed = newSpeed;
         }
         if (justCollidedWith && justCollidedWith.sprite !== "obstacle") {
-          justCollidedWith.y -= (PLAYER.currentSpeed * 2);
+          justCollidedWith.y -= (PLAYER.currentSpeed * 1.5);
         }
       } else {
         let newSpeed = PLAYER.currentSpeed + 0.1;
@@ -910,6 +910,14 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     canvas.style.width = canvasElemW + "px";
     canvas.style.height = canvasElemH + "px";
 
+    let pauseScreen = document.getElementsByClassName("pause-screen")[0];
+    pauseScreen.style.width = canvasElemW + "px";
+    pauseScreen.style.height = canvasElemH + "px";
+
+    let canvasWrapper = document.getElementsByClassName("canvas-wrapper")[0];
+    canvasWrapper.style.width = canvasElemW + "px";
+    canvasWrapper.style.height = canvasElemH + "px";
+
   }
 
   /**
@@ -962,16 +970,28 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     }
   }
 
+  const showPauseScreen = () => {
+    let elem = document.getElementsByClassName("pause-screen")[0];
+    elem.style.display = "block";
+  }
+
+  const hidePauseScreen = () => {
+    let elem = document.getElementsByClassName("pause-screen")[0];
+    elem.style.display = "none";
+  }
+
   /**
    * Pauses and resumes game loop.
    */
   const pauseGame = () => {
     if (!GAME.isGameover) {
       if (!GAME.isPaused) {
+        showPauseScreen();
         GAME.pauseTime = getTimestamp();
         GAME.isPaused = true;
         stopAnimLoop();
       } else {
+        hidePauseScreen();
         // shift start time by time game has been GAME.isPaused
         GAME.startTime += (getTimestamp() - GAME.pauseTime);
         GAME.isPaused = false;
@@ -1008,6 +1028,8 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     PLAYER.lives = LIVES_TOTAL;
     PLAYER.condition = CAR_CONDITION.NORMAL;
     PLAYER.collisionTime = null;
+
+    hidePauseScreen();
 
     // start a new loop
     GAME.lastTick = getTimestamp();
@@ -1075,5 +1097,20 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("keydown", onKeyDown);
   canvas.addEventListener("touchstart", onTouchStart);
+
+  document.getElementById("restart-button")
+          .addEventListener("touchstart", restartGame);
+  document.getElementById("restart-button")
+          .addEventListener("click", restartGame);
+
+  document.getElementById("pause-button")
+          .addEventListener("touchstart", pauseGame);
+  document.getElementById("pause-button")
+          .addEventListener("click", pauseGame);
+
+  document.getElementById("resume-button")
+          .addEventListener("touchstart", pauseGame);
+  document.getElementById("resume-button")
+          .addEventListener("click", pauseGame);
 
 }());

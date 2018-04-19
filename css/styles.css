@@ -3,17 +3,106 @@ html, body {
   height: 100%;
   padding: 0;
   margin: 0;
+  font-size: 2em;
   overflow: hidden;
+  font-family: "Lato";
 }
 
 .container {
   margin: auto;
 }
 
+.canvas-wrapper {
+  width: 640px;
+  height: 640px;
+  margin: 0 auto;
+  position: relative;
+}
+
 canvas#game {
   width: 640px;
   height: 640px;
   margin: 0 auto;
-  border-radius: 15px;
   display: block;
+  border-radius: 15px;
+  z-index: 2;
+}
+
+#pause-button {
+  width: 3em;
+  height: 3em;
+  line-height: 3em;
+  text-align: center;
+  color: white;
+  border: 3px solid white;
+  font-size: 24px;
+  border-radius: 50%;
+  position: absolute;
+  bottom: 20px;
+  right: 50px;
+  cursor: pointer;
+  z-index: 3;
+}
+
+@media (max-width: 640px) {
+  #pause-button {
+    width: 2em;
+    height: 2em;
+    line-height: 2em;
+    right: 20px;
+  }
+  .pause-screen > div {
+    width: 2em;
+    height: 2em;
+    line-height: 2em;
+  }
+}
+
+.pause-screen {
+  width: inherit;
+  height: inherit;
+  background-color: rgba(0, 0, 0, 0.4);
+  position: absolute;
+  border-radius: 15px;
+  z-index: 4;
+  display: none;
+}
+
+#restart-button,
+#resume-button {
+  cursor: pointer;
+}
+
+#resume-button {
+  left: 75%;
+}
+
+#restart-button {
+  left: 25%;
+}
+
+.pause-screen .btn-wrapper {
+  font-size: 34px;
+  cursor: pointer;
+}
+
+.pause-screen .btn-text {
+  font-size: 18px;
+  line-height: 40px;
+  color: white;
+}
+
+.pause-screen > div {
+  width: 3em;
+  height: 3em;
+  line-height: 3em;
+  font-size: 34px;
+  text-align: center;
+  border-radius: 50%;
+  top: 50%;
+  margin-top: -1.5em;
+  margin-left: -1.5em;
+  color: white;
+  border: 3px solid white;
+  position: absolute;
 }
