@@ -42,7 +42,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     NORMAL: 1,
     COLLIDED: 2,
     CRASHED: 3
-  }
+  };
 
   let justCollidedWith = null;
 
@@ -92,7 +92,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     gridColSizeMin: 300,
     gridColSizeMax: 150,
     lastBoard: [[1, 1, 1], [1, 1, 1], [1, 1, 1]]
-  }
+  };
 
   /**
    * Extra empty row prepending before board to place path end for A*.
@@ -112,7 +112,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     ARROW_RIGHT: 39,
     R: 82,
     P: 80
-  }
+  };
 
   /**
    * Flags to indicate car direction when turning, resp. changing lane.
@@ -121,7 +121,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
   const DIR = {
     LEFT: -1,
     RIGHT: 1
-  }
+  };
 
   // colors
   const GREEN = "#5AC546";
@@ -132,7 +132,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
   const ROAD_OFFSET = {
     x: sprites["left_sideways_1"].w,
     y: sprites["road"].h
-  }
+  };
 
   const LANES_CENTERS = [
     ~~(CANVAS_CX - 105),
@@ -156,7 +156,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
       x: ROAD_OFFSET.x + sprites["road"].w,
       y: sprites["right_sideways_1"].h
     }
-  }
+  };
 
   /**
    * Probabilities of popping up water, tree and field sideway sprites.
@@ -173,7 +173,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
   const SCORE_FRAME_RADIUS = 5;
 
   // maps traffic sprite type to pool of corresponding sprite names
-  const TRAFFIC_SPRITES_POOL = {}
+  const TRAFFIC_SPRITES_POOL = {};
 
   Object
     .entries(sprites)
@@ -225,16 +225,16 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     let sy = tile.y;
     let sw = tile.w;
     let sh = tile.h;
-    ctx.drawImage(tileset, sx, sy, sw, sh, x, y, sw * SCALE, sh * SCALE);
+    ctx.drawImage(tileset, sx, sy, sw, sh, x, y, ~~(sw * SCALE), ~~(sh * SCALE));
   }
 
   /**
    * Draws objects from roads pool onto canvas context.
    */
   const drawRoad = () => {
-    roadsPool.forEach(
-      block => drawTile("road", ROAD_OFFSET.x * SCALE, ~~(block.y * SCALE))
-    );
+    roadsPool.forEach(block => {
+      drawTile("road", ROAD_OFFSET.x * SCALE, ~~(block.y * SCALE));
+    });
   }
 
   /**
@@ -272,11 +272,11 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
 
     ctx.save();
 
-    let tx = PLAYER.x + (sprites["car"].w / 4 * SCALE);
-    let ty = PLAYER.y + (sprites["car"].h / 4 * SCALE);
+    let tx = PLAYER.x + (sprites["car"].w / 8 * SCALE);
+    let ty = PLAYER.y + (sprites["car"].h / 8 * SCALE);
 
-    let x = -(sprites["car"].w / 4 * SCALE);
-    let y = -(sprites["car"].h / 4 * SCALE);
+    let x = -(sprites["car"].w / 8 * SCALE);
+    let y = -(sprites["car"].h / 8 * SCALE);
 
     ctx.translate(tx, ty);
     ctx.rotate(PLAYER.rotation);
@@ -762,11 +762,37 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
    */
   const hasCarJoinedNewLane = () => {
     if (PLAYER.turningDir === DIR.LEFT) {
-      return PLAYER.x < PLAYER_CAR_LANES_POS[PLAYER.laneIndex];
+      return PLAYER.x <= PLAYER_CAR_LANES_POS[PLAYER.laneIndex];
     } else if (PLAYER.turningDir === DIR.RIGHT) {
-      return PLAYER.x > PLAYER_CAR_LANES_POS[PLAYER.laneIndex];
+      return PLAYER.x >= PLAYER_CAR_LANES_POS[PLAYER.laneIndex];
     }
     return false;
+  }
+
+  const switchLanes = () => {
+    let distance = PLAYER.turningSpeed * GAME.deltaTime;
+
+    PLAYER.x += (distance * PLAYER.turningDir);
+    PLAYER.rotation += (CAR_ROTATION_RAD_INC * PLAYER.turningDir);
+
+    if (hasCarJoinedNewLane()) { // animation done
+      PLAYER.isTurning = false; // is not turning anymore
+      PLAYER.turningDir = null; // no actual turning direction
+      PLAYER.x = PLAYER_CAR_LANES_POS[PLAYER.laneIndex]; // set position for last frame
+    }
+  }
+
+  /**
+   * Straighten car after switching lane
+   */
+  const finishTurningRotation = () => {
+    if (PLAYER.rotation !== 0) {
+      if (PLAYER.rotation < 0) {
+        PLAYER.rotation += CAR_ROTATION_RAD_INC;
+      } else {
+        PLAYER.rotation -= CAR_ROTATION_RAD_INC;
+      }
+    }
   }
 
   /**
@@ -775,28 +801,9 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
   const movePlayerCar = () => {
 
     if (PLAYER.isTurning && !GAME.isGameover) {
-
-      let distance = PLAYER.turningSpeed * GAME.deltaTime;
-
-      PLAYER.x += (distance * PLAYER.turningDir);
-      PLAYER.rotation += (CAR_ROTATION_RAD_INC * PLAYER.turningDir);
-
-      if (hasCarJoinedNewLane()) { // animation done
-        GAME.lastTick = null;
-        PLAYER.isTurning = false; // is not turning anymore
-        PLAYER.turningDir = null; // no actual turning direction
-        PLAYER.lastLaneIndex = PLAYER.laneIndex;
-        PLAYER.x = PLAYER_CAR_LANES_POS[PLAYER.laneIndex]; // set position for last frame
-      }
-
+      switchLanes();
     } else {
-      if (PLAYER.rotation !== 0) {
-        if (PLAYER.rotation < 0) {
-          PLAYER.rotation += CAR_ROTATION_RAD_INC;
-        } else {
-          PLAYER.rotation -= CAR_ROTATION_RAD_INC;
-        }
-      }
+      finishTurningRotation();
     }
 
     // set normal car condition back to normal after some time
@@ -928,7 +935,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
   const render = timeNow => {
 
     clearCanvas();
-    genTraffic();
+    // genTraffic();
 
     move();
 
@@ -936,7 +943,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
 
     draw();
 
-    adjustDifficulty();
+    // adjustDifficulty();
 
 
     GAME.deltaTime = (timeNow - GAME.lastTick) / 1000;
@@ -1028,6 +1035,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     PLAYER.lives = LIVES_TOTAL;
     PLAYER.condition = CAR_CONDITION.NORMAL;
     PLAYER.collisionTime = null;
+    PLAYER.x = PLAYER_CAR_LANES_POS[PLAYER.laneIndex];
 
     hidePauseScreen();
 
@@ -1089,10 +1097,16 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
    * Binding listeners
    */
 
-  tileset.addEventListener("load", () => {
-   resizeCanvas();
-   initGame();
-  }, false);
+   tileset.addEventListener("load", () => {
+
+     ctx.mozImageSmoothingEnabled = false;
+     ctx.webkitImageSmoothingEnabled = false;
+     ctx.msImageSmoothingEnabled = false;
+     ctx.imageSmoothingEnabled = false;
+
+     resizeCanvas();
+     initGame();
+   }, false);
 
   window.addEventListener("resize", resizeCanvas);
   window.addEventListener("keydown", onKeyDown);
