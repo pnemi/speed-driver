@@ -44,20 +44,6 @@ canvas#game {
   z-index: 3;
 }
 
-@media (max-width: 640px) {
-  #pause-button {
-    width: 2em;
-    height: 2em;
-    line-height: 2em;
-    right: 20px;
-  }
-  .pause-screen > div {
-    width: 2em;
-    height: 2em;
-    line-height: 2em;
-  }
-}
-
 .pause-screen {
   width: inherit;
   height: inherit;
@@ -92,7 +78,8 @@ canvas#game {
   color: white;
 }
 
-.pause-screen > div {
+#restart-button,
+#resume-button {
   width: 3em;
   height: 3em;
   line-height: 3em;
@@ -100,9 +87,25 @@ canvas#game {
   text-align: center;
   border-radius: 50%;
   top: 50%;
-  margin-top: -1.5em;
-  margin-left: -1.5em;
+  transform: translate(-50%, -50%);
   color: white;
   border: 3px solid white;
   position: absolute;
+}
+
+@media (max-width: 640px) {
+  #pause-button {
+    width: 2em;
+    height: 2em;
+    line-height: 2em;
+    right: 20px;
+  }
+  #restart-button,
+  #resume-button {
+    font-size: 24px;
+  }
+
+  .pause-screen .btn-text {
+    font-size: 14px;
+  }
 }
