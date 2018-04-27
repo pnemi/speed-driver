@@ -12,7 +12,8 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
 
   // canvas dimensions
   const CANVAS_W = 640;
-  const CANVAS_H = 640;
+  const CANVAS_H = 960;
+  const ASPECT_RATIO = CANVAS_H / CANVAS_W;
 
   const CANVAS_CX = CANVAS_W / 2;
   const CANVAS_CY = CANVAS_H / 2;
@@ -32,7 +33,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
   const COLLISION_BLINKING_FREQ = 50;
   const CRASH_ANIM_DURATION = 600;
   const NUM_OF_CRASH_SPRITES = 7;
-  const CAR_ROTATION_RAD_INC = 1 * Math.PI / 180;
+  const CAR_ROTATION_RAD_INC = 1;
 
   /**
    * Flags to indicate whether car is good, collided recently or has crashed.
@@ -280,7 +281,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     let y = -(sprites["car"].h / 8 * SCALE);
 
     ctx.translate(tx, ty);
-    ctx.rotate(PLAYER.rotation);
+    ctx.rotate(PLAYER.rotation * Math.PI / 180);
 
     if (PLAYER.condition === CAR_CONDITION.NORMAL) {
 
@@ -288,7 +289,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
 
     } else if (PLAYER.condition === CAR_CONDITION.COLLIDED) {
 
-      let shouldBlink = Math.floor(Date.now() / COLLISION_BLINKING_FREQ) % 2
+      let shouldBlink = Math.floor(Date.now() / COLLISION_BLINKING_FREQ) % 2;
 
       if (shouldBlink) {
         drawTile("car", x, y);
@@ -900,18 +901,20 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
   /**
    * Resizes canvas element to fit either full width or height while preserving
    * aspect ratio and 640px max width/height (no oversizing)
-   * @return {[type]} [description]
    */
   const resizeCanvas = () => {
 
     let canvasElemW, canvasElemH;
 
-    if (window.innerHeight > window.innerWidth) {
-      canvasElemW = Math.min(window.innerWidth, CANVAS_W);
-      canvasElemH = canvasElemW;
-    } else {
-      canvasElemH = Math.min(window.innerHeight, CANVAS_H);
-      canvasElemW = canvasElemH;
+    if (window.innerHeight < CANVAS_H) {
+      canvasElemH = window.innerHeight;
+      canvasElemW = canvasElemH / ASPECT_RATIO;
+    } else if (window.innerWidth < CANVAS_W) {
+      canvasElemW = window.innerWidth;
+      canvasElemH = canvasElemW * ASPECT_RATIO;
+    }  else {
+      canvasElemW = CANVAS_W;
+      canvasElemH = CANVAS_H;
     }
 
     canvas.style.width = canvasElemW + "px";
@@ -959,9 +962,11 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
    */
   const turnRight = () => {
     if (PLAYER.laneIndex + 1 < NUM_OF_LANES) {
+      if (!PLAYER.isTurning) {
+        PLAYER.lastLaneIndex = PLAYER.laneIndex;
+      }
       PLAYER.isTurning = true;
       PLAYER.turningDir = DIR.RIGHT;
-      PLAYER.lastLaneIndex = PLAYER.laneIndex;
       PLAYER.laneIndex += 1;
     }
   }
@@ -971,9 +976,11 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
    */
   const turnLeft = () => {
     if (PLAYER.laneIndex - 1 >= 0) {
+      if (!PLAYER.isTurning) {
+        PLAYER.lastLaneIndex = PLAYER.laneIndex;
+      }
       PLAYER.isTurning = true;
       PLAYER.turningDir = DIR.LEFT;
-      PLAYER.lastLaneIndex = PLAYER.laneIndex;
       PLAYER.laneIndex -= 1;
     }
   }
@@ -1086,11 +1093,13 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     let canvasRect = canvas.getBoundingClientRect();
     let x = event.touches[0].clientX - canvasRect.left;
 
-    if (x < parseInt(canvas.style.width) / 2) {
+
+    if (x < parseInt(canvas.style.width, 10) / 2) {
       turnLeft();
     } else {
       turnRight();
     }
+
   }
 
   /**
@@ -1103,6 +1112,9 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
      ctx.webkitImageSmoothingEnabled = false;
      ctx.msImageSmoothingEnabled = false;
      ctx.imageSmoothingEnabled = false;
+
+     canvas.style.width = CANVAS_W + "px";
+     canvas.style.height = CANVAS_H + "px";
 
      resizeCanvas();
      initGame();

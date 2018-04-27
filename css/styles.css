@@ -13,15 +13,11 @@ html, body {
 }
 
 .canvas-wrapper {
-  width: 640px;
-  height: 640px;
   margin: 0 auto;
   position: relative;
 }
 
 canvas#game {
-  width: 640px;
-  height: 640px;
   margin: 0 auto;
   display: block;
   border-radius: 15px;
@@ -78,6 +74,10 @@ canvas#game {
   color: white;
 }
 
+#info {
+  font-size: 20px;
+}
+
 #restart-button,
 #resume-button {
   width: 3em;
@@ -93,7 +93,7 @@ canvas#game {
   position: absolute;
 }
 
-@media (max-width: 640px) {
+@media screen and (max-width: 640px), screen and (max-height: 960px) {
   #pause-button {
     width: 2em;
     height: 2em;
