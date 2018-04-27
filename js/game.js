@@ -128,6 +128,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
 
   // tracks passed road length in order to determine when to generate next obstaclesPool batch
   let passedPX = -(CANVAS_H / 2);
+  let passedPXTotal = passedPX;
 
   const ROAD_OFFSET = {
     x: sprites["left_sideways_1"].w,
@@ -346,7 +347,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
 
     // do not update score anymore once game is over
     if (!GAME.isGameover) {
-      GAME.score = ~~((getTimestamp() - GAME.startTime) / 1000 * SCORE_GAIN_PS);
+      GAME.score = Math.max(0, ~~(passedPXTotal / 100));
     }
 
     let scoreWidth = ctx.measureText(GAME.score).width;
@@ -605,10 +606,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
 
       GAME.lastBoard = newBoardFinal;
 
-      // console.log(passedPX);
       passedPX = 0; // reset counter
-
-      // console.log("NEW");
 
       newBoardFinal.forEach((row, rowIndex) => {
         row.forEach((sprite, laneIndex) => {
@@ -638,6 +636,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
         })
       })
 
+      // adjusting grid size difficulty
       let newGridColSize = GAME.gridColSize - 3;
       if (newGridColSize >= GAME.gridColSizeMax) {
         GAME.gridColSize = newGridColSize;
@@ -832,6 +831,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     }
 
     passedPX += PLAYER.currentSpeed;
+    passedPXTotal += PLAYER.currentSpeed;
 
   }
 
@@ -941,6 +941,7 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
 
     checkCollisions();
 
+
     draw();
 
     // adjustDifficulty();
@@ -1000,7 +1001,6 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
       } else {
         hidePauseScreen();
         // shift start time by time game has been GAME.isPaused
-        GAME.startTime += (getTimestamp() - GAME.pauseTime);
         GAME.isPaused = false;
         GAME.lastTick = getTimestamp();
         render(GAME.lastTick);
@@ -1018,9 +1018,10 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     // clear obstaclesPool and other carsPool from pool
     obstaclesPool = [];
     carsPool = [];
+    passedPX = -(CANVAS_H / 2);
+    passedPXTotal = passedPX;
 
     // reset gameplay flags
-    GAME.startTime = getTimestamp();
     GAME.isPaused = false;
     GAME.isGameover = false;
     GAME.score = 0;
@@ -1052,7 +1053,6 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
     initRoad();
     initSideways();
 
-    GAME.startTime = getTimestamp();
     GAME.lastTick = getTimestamp();
 
     render(GAME.lastTick);
@@ -1113,17 +1113,17 @@ import {shuffleArray, pickRandomProperty} from "./utils.js";
   canvas.addEventListener("touchstart", onTouchStart);
 
   document.getElementById("restart-button")
-          .addEventListener("touchstart", restartGame);
+          .addEventListener("touchend", restartGame);
   document.getElementById("restart-button")
           .addEventListener("click", restartGame);
 
   document.getElementById("pause-button")
-          .addEventListener("touchstart", pauseGame);
+          .addEventListener("touchend", pauseGame);
   document.getElementById("pause-button")
           .addEventListener("click", pauseGame);
 
   document.getElementById("resume-button")
-          .addEventListener("touchstart", pauseGame);
+          .addEventListener("touchend", pauseGame);
   document.getElementById("resume-button")
           .addEventListener("click", pauseGame);
 
